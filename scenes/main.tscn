@@ -1,0 +1,66 @@
+[gd_scene load_steps=11 format=3 uid="uid://d3n4eoual2sqf"]
+
+[ext_resource type="PackedScene" uid="uid://ircraft" path="res://scenes/aircraft.tscn" id="1_aircraft"]
+[ext_resource type="PackedScene" path="res://ui/hud.tscn" id="2_hud"]
+[ext_resource type="Script" uid="uid://bk3kmuf1nu2kw" path="res://scripts/camera_controller.gd" id="3_camera"]
+[ext_resource type="Script" uid="uid://dwx0je3sfv6ra" path="res://scripts/fdr_output.gd" id="4_fdr"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_sky"]
+sky_top_color = Color(0.4, 0.6, 0.9, 1)
+sky_horizon_color = Color(0.7, 0.8, 0.9, 1)
+ground_horizon_color = Color(0.7, 0.8, 0.9, 1)
+
+[sub_resource type="Sky" id="Sky_main"]
+sky_material = SubResource("ProceduralSkyMaterial_sky")
+
+[sub_resource type="Environment" id="Environment_main"]
+background_mode = 2
+sky = SubResource("Sky_main")
+ambient_light_source = 2
+ambient_light_sky_contribution = 0.5
+tonemap_mode = 2
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_terrain"]
+size = Vector2(20000, 20000)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ground"]
+albedo_color = Color(0.3, 0.5, 0.2, 1)
+roughness = 0.9
+
+[sub_resource type="WorldBoundaryShape3D" id="WorldBoundaryShape3D_ground"]
+
+[node name="Main" type="Node3D"]
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 100, 0)
+shadow_enabled = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_main")
+
+[node name="Ground" type="StaticBody3D" parent="."]
+
+[node name="TerrainMesh" type="MeshInstance3D" parent="Ground"]
+mesh = SubResource("PlaneMesh_terrain")
+surface_material_override/0 = SubResource("StandardMaterial3D_ground")
+
+[node name="GroundCollision" type="CollisionShape3D" parent="Ground"]
+shape = SubResource("WorldBoundaryShape3D_ground")
+
+[node name="Aircraft" parent="." instance=ExtResource("1_aircraft")]
+transform = Transform3D(-0.788, 0, -0.616, 0, 1, 0, 0.616, 0, -0.788, 0, 300, 0)
+
+[node name="CameraController" type="Node3D" parent="."]
+rotation_order = 0
+script = ExtResource("3_camera")
+aircraft_path = NodePath("../Aircraft")
+chase_distance = 10.0
+chase_height = 3.0
+
+[node name="Camera3D" type="Camera3D" parent="CameraController"]
+current = true
+
+[node name="HUD" parent="." instance=ExtResource("2_hud")]
+
+[node name="FDROutput" type="Node" parent="."]
+script = ExtResource("4_fdr")

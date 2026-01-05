@@ -1,0 +1,78 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/hud.gd" id="1_hud"]
+
+[node name="HUD" type="CanvasLayer"]
+script = ExtResource("1_hud")
+
+[node name="FlightData" type="Control" parent="."]
+anchors_preset = 0
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 250.0
+offset_bottom = 250.0
+
+[node name="AirspeedLabel" type="Label" parent="FlightData"]
+offset_right = 200.0
+offset_bottom = 25.0
+theme_override_font_sizes/font_size = 20
+text = "IAS: 0 kts"
+
+[node name="AltitudeLabel" type="Label" parent="FlightData"]
+offset_top = 28.0
+offset_right = 200.0
+offset_bottom = 53.0
+theme_override_font_sizes/font_size = 20
+text = "ALT: 0 ft"
+
+[node name="VSILabel" type="Label" parent="FlightData"]
+offset_top = 56.0
+offset_right = 200.0
+offset_bottom = 81.0
+theme_override_font_sizes/font_size = 20
+text = "VS: 0 fpm"
+
+[node name="HeadingLabel" type="Label" parent="FlightData"]
+offset_top = 84.0
+offset_right = 200.0
+offset_bottom = 109.0
+theme_override_font_sizes/font_size = 20
+text = "HDG: 000°"
+
+[node name="ThrottleLabel" type="Label" parent="FlightData"]
+offset_top = 112.0
+offset_right = 200.0
+offset_bottom = 137.0
+theme_override_font_sizes/font_size = 20
+text = "THR: 0%"
+
+[node name="PitchLabel" type="Label" parent="FlightData"]
+offset_top = 140.0
+offset_right = 200.0
+offset_bottom = 165.0
+theme_override_font_sizes/font_size = 20
+text = "PITCH: 0.0°"
+
+[node name="RollLabel" type="Label" parent="FlightData"]
+offset_top = 168.0
+offset_right = 200.0
+offset_bottom = 193.0
+theme_override_font_sizes/font_size = 20
+text = "ROLL: 0.0°"
+
+[node name="ControlsHelp" type="Label" parent="."]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -200.0
+offset_top = 10.0
+offset_right = -10.0
+offset_bottom = 180.0
+theme_override_font_sizes/font_size = 16
+text = "Controls:
+W/S - Pitch
+A/D - Roll
+Q/E - Yaw
+Shift/Ctrl - Throttle
+C - Camera"
+horizontal_alignment = 2

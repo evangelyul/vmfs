@@ -1,0 +1,43 @@
+# Claude Code Prompt for Flight Sim
+
+Copy and paste this to Claude Code with godot-mcp enabled:
+
+---
+
+Create a Godot 4 flight simulator project. Reference these files for specifications:
+- flight_model_spec.md (aircraft physics parameters)
+- project_requirements.md (project structure and features)
+
+Build in this order:
+
+1. Create the project structure with folders: scenes/, scripts/, assets/
+
+2. Create aircraft.gd with:
+   - CharacterBody3D flight model
+   - Lift/drag/thrust/weight forces
+   - Control inputs (pitch, roll, yaw, throttle)
+   - Stall modeling
+   - State variables (airspeed, altitude, aoa, etc.)
+
+3. Create aircraft.tscn with CharacterBody3D, CollisionShape3D, placeholder MeshInstance3D (BoxMesh)
+
+4. Create fdr_output.gd that sends UDP packets on port 49003 in X-Plane DATA format (groups 3, 4, 17, 20)
+
+5. Create hud.gd and hud.tscn with Control node showing: airspeed, altitude, vvi, heading, throttle as Labels
+
+6. Create main.tscn with:
+   - WorldEnvironment + DirectionalLight3D
+   - Ground plane (StaticBody3D + MeshInstance3D + CollisionShape3D)
+   - Aircraft instance at position (0, 300, 0)
+   - HUD instance
+   
+7. Set up input actions in project.godot for: pitch_up, pitch_down, roll_left, roll_right, yaw_left, yaw_right, throttle_up, throttle_down
+
+8. Run the project and verify:
+   - Aircraft responds to controls
+   - HUD updates
+   - UDP packets are being sent
+
+Fix any errors and iterate until flyable.
+
+---
