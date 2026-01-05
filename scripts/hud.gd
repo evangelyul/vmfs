@@ -9,6 +9,8 @@ extends CanvasLayer
 @onready var throttle_label: Label = $FlightData/ThrottleLabel
 @onready var pitch_label: Label = $FlightData/PitchLabel
 @onready var roll_label: Label = $FlightData/RollLabel
+@onready var ground_state_label: Label = $FlightData/GroundStateLabel
+@onready var controller_label: Label = $FlightData/ControllerLabel
 
 var aircraft: Node = null
 
@@ -34,3 +36,14 @@ func _process(_delta: float) -> void:
 	throttle_label.text = "THR: %d%%" % int(aircraft.throttle * 100)
 	pitch_label.text = "PITCH: %+.1f°" % aircraft.pitch_deg
 	roll_label.text = "ROLL: %+.1f°" % aircraft.roll_deg
+
+	# Ground state display
+	if aircraft.has_method("get_ground_state_name"):
+		ground_state_label.text = "STATE: %s" % aircraft.get_ground_state_name()
+
+	# Controller status
+	var input_manager = get_node_or_null("/root/InputManager")
+	if input_manager and input_manager.has_controller():
+		controller_label.text = "CTRL: Joystick"
+	else:
+		controller_label.text = "CTRL: Keyboard"

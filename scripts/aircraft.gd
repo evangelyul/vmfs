@@ -33,6 +33,23 @@ extends CharacterBody3D
 @export var stall_aoa_deg: float = 16.0
 @export var critical_aoa_deg: float = 12.0  # Lift starts reducing
 
+# Ground physics parameters
+@export var vr_kts: float = 55.0  # Rotation speed for takeoff
+@export var ground_friction_coeff: float = 0.02  # Rolling friction
+@export var braking_friction_coeff: float = 0.4  # Braking friction
+@export var max_touchdown_vs_fpm: float = 600.0  # Crash threshold (~10 ft/s)
+@export var hard_landing_vs_fpm: float = 300.0  # Warning threshold
+@export var ground_effect_height_m: float = 15.24  # ~50 ft (1 wingspan)
+@export var nosewheel_max_angle_deg: float = 30.0
+@export var nosewheel_effectiveness: float = 0.5
+
+# Ground state machine
+enum GroundState { AIRBORNE, LANDING, LANDED, TAKEOFF_ROLL }
+var ground_state: GroundState = GroundState.AIRBORNE
+var is_crashed: bool = false
+var touchdown_vertical_speed: float = 0.0
+var ground_contact_time: float = 0.0
+
 # State
 var throttle: float = 0.8
 
@@ -99,26 +116,52 @@ func set_view_mode(cockpit: bool) -> void:
 	emit_signal("view_changed", cockpit)
 
 func _physics_process(delta: float) -> void:
+	if is_crashed:
+		return
 	process_input(delta)
 	update_control_positions(delta)
 	calculate_flight_parameters()
+	update_ground_state(delta)
 	apply_aerodynamics(delta)
 	apply_controls(delta)
+	apply_ground_physics(delta)
 	apply_movement(delta)
 	update_position_coords(delta)
 	check_overspeed()
 
 func process_input(delta: float) -> void:
-	# Throttle (Shift/Ctrl)
-	if Input.is_action_pressed("throttle_up"):
-		throttle = clampf(throttle + 0.5 * delta, 0.0, 1.0)
-	if Input.is_action_pressed("throttle_down"):
-		throttle = clampf(throttle - 0.5 * delta, 0.0, 1.0)
+	# Get InputManager singleton for HOTAS support
+	var input_manager = get_node_or_null("/root/InputManager")
 
-	# Set target control positions (keyboard sets target, not direct input)
-	pitch_target = Input.get_axis("pitch_down", "pitch_up")
-	roll_target = Input.get_axis("roll_left", "roll_right")
-	yaw_target = Input.get_axis("yaw_left", "yaw_right")
+	# Throttle handling
+	if input_manager and input_manager.is_using_analog_throttle():
+		# Use analog throttle directly (0-1 range)
+		throttle = input_manager.get_throttle_value()
+	else:
+		# Keyboard throttle (Shift/Ctrl)
+		if Input.is_action_pressed("throttle_up"):
+			throttle = clampf(throttle + 0.5 * delta, 0.0, 1.0)
+		if Input.is_action_pressed("throttle_down"):
+			throttle = clampf(throttle - 0.5 * delta, 0.0, 1.0)
+
+	# Flight controls - combine keyboard and joystick
+	var kb_pitch = Input.get_axis("pitch_down", "pitch_up")
+	var kb_roll = Input.get_axis("roll_left", "roll_right")
+	var kb_yaw = Input.get_axis("yaw_left", "yaw_right")
+
+	var js_pitch = 0.0
+	var js_roll = 0.0
+	var js_yaw = 0.0
+
+	if input_manager:
+		js_pitch = input_manager.get_pitch_input()
+		js_roll = input_manager.get_roll_input()
+		js_yaw = input_manager.get_yaw_input()
+
+	# Use whichever has larger magnitude (keyboard or joystick)
+	pitch_target = kb_pitch if absf(kb_pitch) > absf(js_pitch) else js_pitch
+	roll_target = kb_roll if absf(kb_roll) > absf(js_roll) else js_roll
+	yaw_target = kb_yaw if absf(kb_yaw) > absf(js_yaw) else js_yaw
 
 func update_control_positions(delta: float) -> void:
 	# Smoothly move actual control positions toward targets
@@ -182,8 +225,11 @@ func apply_aerodynamics(delta: float) -> void:
 
 	cl = clampf(cl, -0.5, 1.6)
 
-	# Lift force
-	var lift_magnitude = cl * q * wing_area_m2
+	# Ground effect - increases lift when close to ground
+	var ground_effect = calculate_ground_effect_factor()
+
+	# Lift force (with ground effect)
+	var lift_magnitude = cl * q * wing_area_m2 * ground_effect
 	var lift_direction = global_transform.basis.y
 	var lift = lift_direction * lift_magnitude
 
@@ -242,9 +288,7 @@ func apply_movement(_delta: float) -> void:
 	velocity = aircraft_velocity
 	move_and_slide()
 	aircraft_velocity = velocity
-
-	if is_on_floor():
-		aircraft_velocity.y = maxf(aircraft_velocity.y, 0)
+	# Ground handling is now done in apply_ground_physics()
 
 func update_position_coords(delta: float) -> void:
 	var lat_rad = deg_to_rad(latitude)
@@ -262,6 +306,121 @@ func check_overspeed() -> void:
 		var excess = airspeed_kts - vne_kts
 		if excess > 10:
 			aircraft_velocity *= 0.99  # Gradual speed reduction
+
+func calculate_ground_effect_factor() -> float:
+	# Ground effect increases lift when close to ground
+	# Maximum ~50% lift increase at wheel height, decreasing to 0 at ~1 wingspan
+	if altitude_m > ground_effect_height_m:
+		return 1.0
+
+	var height_ratio = altitude_m / ground_effect_height_m
+	height_ratio = maxf(height_ratio, 0.1)  # Prevent division issues
+	var effect = 1.0 + 0.5 * (1.0 - height_ratio) * (1.0 - height_ratio)
+	return effect
+
+func update_ground_state(delta: float) -> void:
+	var now_on_floor = is_on_floor()
+
+	match ground_state:
+		GroundState.AIRBORNE:
+			if now_on_floor:
+				# Just touched down
+				touchdown_vertical_speed = absf(vertical_speed_fpm)
+				if touchdown_vertical_speed > max_touchdown_vs_fpm:
+					trigger_crash("Hard landing - exceeded max touchdown rate (%.0f fpm)" % touchdown_vertical_speed)
+					return
+				elif touchdown_vertical_speed > hard_landing_vs_fpm:
+					print("Warning: Hard landing (%.0f fpm)" % touchdown_vertical_speed)
+				ground_state = GroundState.LANDING
+				ground_contact_time = 0.0
+				print("Touchdown at %.0f fpm" % touchdown_vertical_speed)
+
+		GroundState.LANDING:
+			ground_contact_time += delta
+			if not now_on_floor:
+				# Bounced back into the air
+				ground_state = GroundState.AIRBORNE
+			elif ground_contact_time > 0.5:  # Stable on ground for 0.5s
+				ground_state = GroundState.LANDED
+				print("Landed - rolling")
+
+		GroundState.LANDED:
+			if not now_on_floor:
+				ground_state = GroundState.AIRBORNE
+			elif throttle > 0.5 and airspeed_kts > 20:
+				ground_state = GroundState.TAKEOFF_ROLL
+				print("Takeoff roll initiated")
+
+		GroundState.TAKEOFF_ROLL:
+			if not now_on_floor and altitude_m > 2.0:
+				ground_state = GroundState.AIRBORNE
+				print("Airborne!")
+			elif throttle < 0.3:
+				ground_state = GroundState.LANDED
+				print("Takeoff aborted")
+
+func apply_ground_physics(delta: float) -> void:
+	if ground_state == GroundState.AIRBORNE:
+		return
+
+	# Clamp to ground level
+	if global_position.y < 0:
+		global_position.y = 0
+	if is_on_floor():
+		aircraft_velocity.y = maxf(aircraft_velocity.y, 0)
+
+	# Rolling friction
+	var ground_speed = Vector2(aircraft_velocity.x, aircraft_velocity.z).length()
+	if ground_speed > 0.1:
+		var friction = ground_friction_coeff
+		if Input.is_action_pressed("brake"):
+			friction = braking_friction_coeff
+
+		var friction_decel = friction * GRAVITY
+		var velocity_2d = Vector2(aircraft_velocity.x, aircraft_velocity.z)
+		var decel_amount = friction_decel * delta
+
+		if decel_amount > ground_speed:
+			aircraft_velocity.x = 0
+			aircraft_velocity.z = 0
+		else:
+			var decel_dir = velocity_2d.normalized()
+			aircraft_velocity.x -= decel_dir.x * decel_amount
+			aircraft_velocity.z -= decel_dir.y * decel_amount
+
+	# Nose wheel steering (only effective at low speed)
+	if ground_state in [GroundState.LANDED, GroundState.TAKEOFF_ROLL]:
+		var steering_effectiveness = clampf(1.0 - (airspeed_kts / 40.0), 0.0, 1.0)
+		var steering_angle = yaw_input * nosewheel_max_angle_deg * steering_effectiveness
+
+		if absf(steering_angle) > 0.1 and ground_speed > 1.0:
+			var turn_rate = steering_angle * nosewheel_effectiveness * delta
+			rotate_object_local(Vector3.UP, deg_to_rad(turn_rate))
+
+			# Also rotate velocity vector to follow turn
+			var vel_rotation = Basis(Vector3.UP, deg_to_rad(turn_rate))
+			aircraft_velocity = vel_rotation * aircraft_velocity
+
+	# Keep aircraft level on ground (prevent tipping)
+	if ground_state == GroundState.LANDED and ground_speed < 5.0:
+		var current_euler = global_transform.basis.get_euler()
+		current_euler.x = move_toward(current_euler.x, 0, delta * 2.0)
+		current_euler.z = move_toward(current_euler.z, 0, delta * 2.0)
+		global_transform.basis = Basis.from_euler(current_euler)
+
+func trigger_crash(reason: String) -> void:
+	is_crashed = true
+	print("CRASH: %s" % reason)
+	aircraft_velocity = Vector3.ZERO
+	# Future: show crash screen, play sound, etc.
+
+func get_ground_state_name() -> String:
+	match ground_state:
+		GroundState.AIRBORNE: return "AIRBORNE"
+		GroundState.LANDING: return "LANDING"
+		GroundState.LANDED: return "LANDED"
+		GroundState.TAKEOFF_ROLL: return "TAKEOFF"
+		_: return "UNKNOWN"
 
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("toggle_camera"):

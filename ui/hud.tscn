@@ -60,6 +60,22 @@ offset_bottom = 193.0
 theme_override_font_sizes/font_size = 20
 text = "ROLL: 0.0°"
 
+[node name="GroundStateLabel" type="Label" parent="FlightData"]
+offset_top = 200.0
+offset_right = 200.0
+offset_bottom = 225.0
+theme_override_font_sizes/font_size = 20
+theme_override_colors/font_color = Color(0.5, 1.0, 0.5, 1)
+text = "STATE: AIRBORNE"
+
+[node name="ControllerLabel" type="Label" parent="FlightData"]
+offset_top = 228.0
+offset_right = 200.0
+offset_bottom = 253.0
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+text = "CTRL: Keyboard"
+
 [node name="ControlsHelp" type="Label" parent="."]
 anchors_preset = 1
 anchor_left = 1.0
@@ -74,5 +90,7 @@ W/S - Pitch
 A/D - Roll
 Q/E - Yaw
 Shift/Ctrl - Throttle
-C - Camera"
+B - Brake
+C - Camera
+ESC - Pause"
 horizontal_alignment = 2
